@@ -39,6 +39,9 @@ namespace SqlSugar
         int BulkMerge(List<T> datas);
         int BulkMerge(DataTable dataTable, string[] whereColumns,bool isIdentity);
         Task<int> BulkMergeAsync(DataTable dataTable, string[] whereColumns, bool isIdentity);
+
+        Task<int> BulkMergeAsync(DataTable dataTable, string[] whereColumns, bool isIdentity, string[] identityColumns);
+
         int BulkMerge(DataTable dataTable, string[] whereColumns,string[] updateColumns, bool isIdentity);
         Task<int> BulkMergeAsync(DataTable dataTable, string[] whereColumns, string[] updateColumns, bool isIdentity);
         Task<int> BulkMergeAsync(List<T> datas, string[] whereColumns);

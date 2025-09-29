@@ -202,6 +202,15 @@ namespace SqlSugar
             var result = (Task<int>)bulkCopyMethod.Invoke(fastestMethod, new object[] { newValue });
             return result;
         }
+        public Task<int> BulkMergeAsync(DataTable dataTable, string[] whereColumns, bool isIdentity, string[] identityColumns)
+        {
+            object newValue, fastestMethod;
+            MethodInfo bulkCopyMethod;
+            _BulkMerge(dataTable, whereColumns, out newValue, out fastestMethod, out bulkCopyMethod, true, isIdentity, identityColumns);
+            var result = (Task<int>)bulkCopyMethod.Invoke(fastestMethod, new object[] { newValue });
+            return result;
+        }
+
         public int BulkMerge(DataTable dataTable, string[] whereColumns, string[] updateColumns, bool isIdentity)
         {
             return BulkMergeAsync(dataTable, whereColumns, updateColumns, isIdentity).GetAwaiter().GetResult();
@@ -319,6 +328,43 @@ namespace SqlSugar
                                   .Invoke(this.context, null);
             bulkCopyMethod = fastestMethod.GetType().GetMyMethod(isAsync? "BulkMergeAsync" : "BulkMerge", 1);
         }
+
+        private void _BulkMerge(DataTable dataTable, string[] whereColumns, out object newValue, out object fastestMethod, out MethodInfo bulkCopyMethod, bool isAsync, bool isIdentity, string[] identityColumns)
+        {
+            Check.ExceptionEasy(this.AsName.IsNullOrEmpty(), "need .AS(tablaeName) ", "需要 .AS(tablaeName) 设置表名");
+            var className = "BulkMerge_" + isIdentity + this.AsName.GetNonNegativeHashCodeString();
+            var builder = this.context.DynamicBuilder().CreateClass(className, new SugarTable()
+            {
+                TableName = this.AsName
+            });
+            foreach (DataColumn item in dataTable.Columns)
+            {
+                var isPrimaryKey = whereColumns.Any(it => it.EqualCase(item.ColumnName));
+                var isIdentityKey = identityColumns.Any(it => it.EqualCase(item.ColumnName));
+                var propertyType = item.DataType;
+                if (!propertyType.IsClass() && propertyType != typeof(string) && propertyType != typeof(byte[]))
+                {
+                    propertyType = typeof(Nullable<>).MakeGenericType(UtilMethods.GetUnderType(item.DataType));
+                }
+                builder.CreateProperty(item.ColumnName, propertyType, new SugarColumn()
+                {
+                    IsPrimaryKey = isPrimaryKey,
+                    IsIdentity = isIdentity && isIdentityKey,
+                    IsNullable = true,
+
+                });
+            }
+            var dicList = this.context.Utilities.DataTableToDictionaryList(dataTable);
+            var type = builder.WithCache().BuilderType();
+            var value = this.context.DynamicBuilder().CreateObjectByType(type, dicList);
+            newValue = UtilMethods.ConvertToObjectList(type, value);
+            fastestMethod = this.context.GetType()
+                                  .GetMethod("Fastest")
+                                  .MakeGenericMethod(type)
+                                  .Invoke(this.context, null);
+            bulkCopyMethod = fastestMethod.GetType().GetMyMethod(isAsync ? "BulkMergeAsync" : "BulkMerge", 1);
+        }
+
         private void _BulkMerge(DataTable dataTable, string[] whereColumns,string [] updateColumns, out object newValue, out object fastestMethod, out MethodInfo bulkCopyMethod, bool isAsync, bool isIdentity)
         {
             Check.ExceptionEasy(this.AsName.IsNullOrEmpty(), "need .AS(tablaeName) ", "需要 .AS(tablaeName) 设置表名");
